@@ -7,8 +7,7 @@ namespace Game.Scripts.Interfaces
     {
         void StartMoving();
         void StopMoving();
-        void CutStackPlatform(IStackPlatform previousPlatform);
-        event Action OnPlatformStopped;
+        bool TryCutStackPlatform(IStackPlatform previousPlatform);
         public Collider Collider { get; }
         
         public GameObject GameObject { get; }

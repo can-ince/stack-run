@@ -1,29 +1,31 @@
 using System;
+using System.Collections;
 using Game.Scripts.Interfaces;
 using UnityEngine;
-using UnityEngine.Serialization;
 
 namespace Game.Scripts.Behaviours
 {
     public class StackPlatformBehaviour : MonoBehaviour, IStackPlatform
     {
-        public event Action OnPlatformStopped;
+        public static event Action<IStackPlatform> PlatformDriftedAway;
 
         [SerializeField] private Renderer platformRenderer;
-        [SerializeField] private Collider collider;
-        [SerializeField] private Rigidbody rigidbody;
+        [SerializeField] private Collider platformCollider;
+        [SerializeField] private Rigidbody platformRigidbody;
         private float _moveSpeed;
         private bool _isMoving;
         private Vector3 _moveDir;
-
+        private Coroutine _ableToStackControlRoutine;
+        private IStackPlatform _previousPlatform;
         public Bounds Bounds => platformRenderer.bounds;
-        public Collider Collider => collider;
+        public Collider Collider => platformCollider;
         public GameObject GameObject => gameObject;
 
-        public Rigidbody Rigidbody => rigidbody;
+        public Rigidbody Rigidbody => platformRigidbody;
 
-        public void Initialize(Vector3 moveDir,float moveSpeed, Material colorMat)
+        public void Initialize(IStackPlatform previousPlatform,Vector3 moveDir,float moveSpeed, Material colorMat)
         {
+            _previousPlatform = previousPlatform;
             _moveDir = moveDir;
             _moveSpeed = moveSpeed;
             platformRenderer.material = colorMat;
@@ -41,15 +43,25 @@ namespace Game.Scripts.Behaviours
             }
         }
 
-        public void StartMoving() => _isMoving = true;
+        public void StartMoving()
+        {
+            _isMoving = true;   
+            
+            _ableToStackControlRoutine ??= StartCoroutine(AbleToStackControlRoutine(_previousPlatform));
+        }
 
         public void StopMoving()
         {
             _isMoving = false;
-            OnPlatformStopped?.Invoke();
+
+            if (_ableToStackControlRoutine != null)
+            {
+                StopCoroutine(_ableToStackControlRoutine);
+                _ableToStackControlRoutine = null;
+            }
         }
         
-        public void CutStackPlatform(IStackPlatform previousPlatform)
+        public bool TryCutStackPlatform(IStackPlatform previousPlatform)
         {
             if (!TryGetOverlapInfo(previousPlatform, 
                     out var overlapLength, 
@@ -59,8 +71,11 @@ namespace Game.Scripts.Behaviours
             {
                 Debug.Log("No overlap: The platform is completely overflowing, GAME OVER!");
                 // todo: game over   
+
+                // Set the platform rb kinematic to false and let it fall   
+                platformRigidbody.isKinematic = false;
                 
-                return;
+                return false;
             }
             
             // Update the platform according to the new size and position
@@ -73,6 +88,8 @@ namespace Game.Scripts.Behaviours
             }
             
             Debug.Log("Platform cut. Remaining length: " + overlapLength + ", Falling piece length: " + cutLength);
+
+            return true;
         }
 
         /// <summary>
@@ -170,6 +187,46 @@ namespace Game.Scripts.Behaviours
             
             // Falling piece destroyed within a certain period of time for automatic cleaning.
             Destroy(fallingPiece, 3f);//todo: can be pooled
+        }
+        
+        /// <summary>
+        /// Checks if the platform is able to stack with the previous platform
+        /// If player does not give any input, platform will drift away and game will end
+        /// </summary>
+        private IEnumerator AbleToStackControlRoutine(IStackPlatform previousPlatform)
+        {
+            var direction = _moveDir.x;
+            
+            // max positionX can go without missing the platform 
+            var maxStackPosX = previousPlatform.Collider.bounds.size.x*direction +
+                            previousPlatform.GameObject.transform.position.x;
+            
+            var inLimit = true;
+            // wait until the platform reaches the limit
+            while (inLimit)
+            {
+                if (_moveDir.x > 0)
+                {
+                    inLimit = maxStackPosX > transform.position.x;
+                }
+                else
+                {
+                    inLimit = maxStackPosX < transform.position.x;
+                }
+                yield return null;
+            }
+
+            OnPlatformDriftedAway();
+        }
+
+        private void OnPlatformDriftedAway()
+        {
+            PlatformDriftedAway?.Invoke(this);
+            
+            // Set the platform rb kinematic to false and let it fall   
+            platformRigidbody.isKinematic = false;
+            
+            StopMoving();
         }
     }
 }

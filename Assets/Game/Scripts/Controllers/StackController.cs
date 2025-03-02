@@ -1,22 +1,30 @@
+using System;
 using System.Collections.Generic;
 using Game.Scripts.Behaviours;
 using Game.Scripts.Helpers;
+using Game.Scripts.Interfaces;
 using UnityEngine;
-using UnityEngine.Serialization;
+using Random = UnityEngine.Random;
 
 namespace Game.Scripts.Controllers
 {
     public class StackController : Singleton<StackController>
     {
+        public static event Action<IStackPlatform> StackingFailed;
+        public static event Action<IStackPlatform> StackingSucced; 
+
         [Header("Platform Settings")] 
         [SerializeField] private StackPlatformBehaviour platformPrefab;
         [SerializeField] private int poolSize = 10;
         [SerializeField] private float platformSpawnDistance = 5f;
         [SerializeField] private float platformMoveSpeed = 3f;
+        [SerializeField] private float platformCutThreshold = 0.1f; //how much distance to cut the platform 
+
         [SerializeField] private Transform platformParent;
         [SerializeField] private Transform poolParent;
         [SerializeField] private Material[] stackColors;
 
+        private bool _isStackingEnabled;
         private Queue<StackPlatformBehaviour> _platformPool = new Queue<StackPlatformBehaviour>();
         private List<StackPlatformBehaviour> _stacks = new List<StackPlatformBehaviour>();
         public StackPlatformBehaviour CurrentPlatform { get; private set; }
@@ -31,19 +39,19 @@ namespace Game.Scripts.Controllers
         {
             SpawnNewPlatform();
             OnGameStarted();
+            
+            StackPlatformBehaviour.PlatformDriftedAway+=OnPlatformDriftedAway;
         }
 
         public void Dispose()
         {
+            StackPlatformBehaviour.PlatformDriftedAway-=OnPlatformDriftedAway;
         }
-
-        private void OnGameStarted()
-        {
-            SpawnNewPlatform();
-        }
-
+        
         void Update()
         {
+            if(!_isStackingEnabled) return;
+            
             if (Input.GetMouseButtonDown(0))
             {
                 StopAndProcessCurrentPlatform();
@@ -53,7 +61,7 @@ namespace Game.Scripts.Controllers
         /// <summary>
         /// Creating stack pool for later use
         /// </summary>
-        void InitializePool()
+        private void InitializePool()
         {
             for (int i = 0; i < poolSize; i++)
             {
@@ -66,7 +74,7 @@ namespace Game.Scripts.Controllers
         /// <summary>
         /// Getting platform from pool or creating new one
         /// </summary>
-        StackPlatformBehaviour GetPlatformFromPool()
+        private StackPlatformBehaviour GetPlatformFromPool()
         {
             if (_platformPool.Count > 0)
             {
@@ -95,7 +103,7 @@ namespace Game.Scripts.Controllers
         /// <summary>
         ///  Spawns a new platform at the next location and updates the active platform.
         /// </summary>
-        public void SpawnNewPlatform()
+        private void SpawnNewPlatform()
         {
             var isInitialPlatform = _stacks.Count == 0;
             var newPlatform = GetPlatformFromPool();
@@ -119,7 +127,7 @@ namespace Game.Scripts.Controllers
                 ? platformPrefab.transform.localScale
                 : CurrentPlatform.transform.localScale;
             
-            newPlatform.Initialize(-randomDir * Vector3.right, platformMoveSpeed,
+            newPlatform.Initialize(CurrentPlatform,-randomDir * Vector3.right, platformMoveSpeed,
                 stackColors[Random.Range(0, stackColors.Length)]);
 
             if (!isInitialPlatform)
@@ -128,28 +136,56 @@ namespace Game.Scripts.Controllers
             CurrentPlatform = newPlatform;
             _stacks.Add(CurrentPlatform);
         }
+        
+        private void OnGameStarted()
+        {
+            _isStackingEnabled = true;
+            SpawnNewPlatform();
+        }
+        
+        private void OnPlatformDriftedAway(IStackPlatform platform)
+        {
+            OnStackingFailed(platform);
+        }
 
+        private void OnStackingFailed(IStackPlatform platform)
+        {
+            _isStackingEnabled = false;
+            StackingFailed?.Invoke(platform);
+        }
 
         /// <summary>
         /// Stops the active platform, performs cutting control and spawns a new platform.
         /// </summary>
         private void StopAndProcessCurrentPlatform()
         {
-            if (CurrentPlatform != null)
-            {
-                CurrentPlatform.StopMoving();
+            if (CurrentPlatform == null) return;
+            
+            CurrentPlatform.StopMoving();
 
-                if (ShouldCutPlatform(CurrentPlatform))
+            if (CheckForPerfectPlacement(CurrentPlatform))
+            {
+                //todo: play a sound             
+                
+                StackingSucced?.Invoke(CurrentPlatform);
+                SpawnNewPlatform();
+
+            }
+            else
+            {
+                // Cut the platform according to previous platform
+                if (CurrentPlatform.TryCutStackPlatform(_stacks[^2]))
                 {
-                    // Cut the platform according to previous platform
-                    CurrentPlatform.CutStackPlatform(_stacks[^2]);
+                    StackingSucced?.Invoke(CurrentPlatform);
+
+                    SpawnNewPlatform();
+                    
                 }
                 else
                 {
-                    //todo: play a sound                        
+                    //The platform is completely overflowing, GAME OVER!
+                    OnStackingFailed(CurrentPlatform);
                 }
-
-                SpawnNewPlatform();
             }
         }
 
@@ -157,12 +193,11 @@ namespace Game.Scripts.Controllers
         ///  Determines if the platform should be cut.
         /// </summary>
         /// <param name="platform"></param>
-        /// <returns>true if platform should be cut </returns>
-        private bool ShouldCutPlatform(StackPlatformBehaviour platform)
+        /// <returns>false if platform should be cut </returns>
+        private bool CheckForPerfectPlacement(Component platform)
         {
-            var cutThreshold = 0.1f;
             var diff = Mathf.Abs(platform.transform.position.x - _stacks[^2].transform.position.x);
-            return diff > cutThreshold;
+            return diff < platformCutThreshold;
         }
         
     }
