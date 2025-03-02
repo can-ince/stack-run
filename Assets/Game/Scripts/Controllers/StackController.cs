@@ -25,6 +25,7 @@ namespace Game.Scripts.Controllers
         [SerializeField] private Material[] stackColors;
 
         private bool _isStackingEnabled;
+        private int _perfectStackComboCounter;
         private Queue<StackPlatformBehaviour> _platformPool = new Queue<StackPlatformBehaviour>();
         private List<StackPlatformBehaviour> _stacks = new List<StackPlatformBehaviour>();
         public StackPlatformBehaviour CurrentPlatform { get; private set; }
@@ -141,6 +142,10 @@ namespace Game.Scripts.Controllers
         {
             _isStackingEnabled = true;
             SpawnNewPlatform();
+            
+            AudioController.Instance.ResetNotePitch();
+            _perfectStackComboCounter = 0;
+
         }
         
         private void OnPlatformDriftedAway(IStackPlatform platform)
@@ -165,7 +170,13 @@ namespace Game.Scripts.Controllers
 
             if (CheckForPerfectPlacement(CurrentPlatform))
             {
-                //todo: play a sound             
+                if (_perfectStackComboCounter > 0)
+                    AudioController.Instance.IncreaseNotePitch();
+                
+                // play a sound  
+                AudioController.Instance.PlayNote();
+                
+                _perfectStackComboCounter++;
                 
                 StackingSucced?.Invoke(CurrentPlatform);
                 SpawnNewPlatform();
@@ -186,6 +197,9 @@ namespace Game.Scripts.Controllers
                     //The platform is completely overflowing, GAME OVER!
                     OnStackingFailed(CurrentPlatform);
                 }
+                
+                _perfectStackComboCounter = 0;
+                AudioController.Instance.ResetNotePitch();
             }
         }
 
