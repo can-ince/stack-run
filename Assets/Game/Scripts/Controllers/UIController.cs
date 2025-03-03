@@ -2,7 +2,6 @@ using System;
 using Game.Scripts.Helpers;
 using Game.Scripts.UI;
 using UnityEngine;
-using UnityEngine.Serialization;
 
 namespace Game.Scripts.Controllers
 {

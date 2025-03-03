@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using Game.Scripts.Behaviours;
 using Game.Scripts.Data;
 using Game.Scripts.Helpers;
@@ -152,11 +151,8 @@ namespace Game.Scripts.Controllers
 
             // initial platform spawns at last anchor platform
             var newSpawnPosition = !isInitialPlatform
-                ? CurrentPlatform.transform.position +
-                  Vector3.forward * platformPrefab.Bounds.size.z +
-                  targetDir * platformSpawnDistance
-                : _currentAnchorPlatformBounds.center+
-                  (_currentAnchorPlatformBounds.extents.z)*Vector3.forward;
+                ? CurrentPlatform.transform.position + Vector3.forward * platformPrefab.Bounds.size.z + targetDir * platformSpawnDistance
+                : _currentAnchorPlatformBounds.center+ (_currentAnchorPlatformBounds.extents.z)*Vector3.forward;
             
             newPlatform.transform.position = newSpawnPosition;
             newPlatform.transform.rotation = Quaternion.LookRotation(Vector3.forward);
