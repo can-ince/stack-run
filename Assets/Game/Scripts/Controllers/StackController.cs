@@ -156,7 +156,7 @@ namespace Game.Scripts.Controllers
                   Vector3.forward * platformPrefab.Bounds.size.z +
                   targetDir * platformSpawnDistance
                 : _currentAnchorPlatformBounds.center+
-                  (_currentAnchorPlatformBounds.extents.z)*Vector3.forward; //todo:+platformPrefab.Bounds.extents.z
+                  (_currentAnchorPlatformBounds.extents.z)*Vector3.forward;
             
             newPlatform.transform.position = newSpawnPosition;
             newPlatform.transform.rotation = Quaternion.LookRotation(Vector3.forward);
@@ -216,6 +216,7 @@ namespace Game.Scripts.Controllers
                 
                 _perfectStackComboCounter = 0;
                 AudioController.Instance.ResetNotePitch();
+                AudioController.Instance.PlayBlockSound();
             }
         }
         

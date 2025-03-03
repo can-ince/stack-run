@@ -8,6 +8,7 @@ namespace Game.Scripts.Controllers
     {
         [SerializeField] private AudioSource audioSource;
         [SerializeField] private AudioClip noteClip;
+        [SerializeField] private AudioClip blockClip;
         
         private float _originalPitch;
 
@@ -30,6 +31,12 @@ namespace Game.Scripts.Controllers
         public void ResetNotePitch()
         {
             audioSource.pitch = _originalPitch;
+        }
+
+        public void PlayBlockSound()
+        {
+            audioSource.clip = blockClip;
+            audioSource.Play();
         }
     }
 }
