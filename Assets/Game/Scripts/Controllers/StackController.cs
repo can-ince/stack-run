@@ -34,7 +34,7 @@ namespace Game.Scripts.Controllers
         private Queue<StackPlatformBehaviour> _platformPool = new Queue<StackPlatformBehaviour>();
         private List<StackPlatformBehaviour> _stacks = new List<StackPlatformBehaviour>();
         public StackPlatformBehaviour CurrentPlatform { get; private set; }
-
+        public Bounds AnchorPlatformBounds => _currentAnchorPlatformBounds;
         void Awake()
         {
             InitializePool();
@@ -47,7 +47,6 @@ namespace Game.Scripts.Controllers
             
             GameController.GameStarted+=OnGameStarted;
             GameController.GameEnded+=OnGameEnded;
-            _currentAnchorPlatformBounds = new Bounds(Vector3.zero, Vector3.zero);
             SetupLevel();
         }
 

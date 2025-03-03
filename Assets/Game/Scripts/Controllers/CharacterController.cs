@@ -12,7 +12,7 @@ namespace Game.Scripts.Controllers
         [SerializeField] private Animator animator;
 
         private Vector3 _targetPosition;
-        private bool _isFalling, _isDancing, _finished;
+        private bool _isFalling, _finished;
         private Coroutine _movementCoroutine;
 
         private static readonly int DanceAnimID = Animator.StringToHash("Dance");
@@ -36,6 +36,7 @@ namespace Game.Scripts.Controllers
         public void Dispose()
         {
             _finished = false;
+            _isFalling = false;
 
             StackController.StackingFailed -= OnPlatformStopped;
             StackController.StackingSucced -= OnPlatformPlaced;
@@ -62,7 +63,6 @@ namespace Game.Scripts.Controllers
             if (animator != null)
             {
                 animator.SetTrigger(DanceAnimID);
-                _isDancing = true;
             }
         }
 

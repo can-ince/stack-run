@@ -35,18 +35,20 @@ namespace Game.Scripts.Controllers
 
         private void Initialize()
         {
-           
+           UIController.Instance.Initialize();
+
            characterController.OnFellFromPlatform+= OnFellFromPlatform;
            characterController.OnReachedToFinish += OnCharacterOnReachedFinalPlatform;
-           characterController.Initialize();
            
-           StackController.Instance.Initialize(GetCurrentLevelData());
-           StartGame();
+            LoadGame();
+            StartGame();
 
         }
     
         private void Dispose()
         {
+            UIController.Instance.Dispose();
+            
             characterController.OnFellFromPlatform-= OnFellFromPlatform;
             characterController.OnReachedToFinish -= OnCharacterOnReachedFinalPlatform;
 
@@ -67,6 +69,25 @@ namespace Game.Scripts.Controllers
             OnGameEnded(true);
         }
 
+        private void LoadGame()
+        {
+            StackController.Instance.Initialize(GetCurrentLevelData());
+
+            var playerStartPoint = StackController.Instance.AnchorPlatformBounds;
+
+            characterController.transform.position =
+                new Vector3(playerStartPoint.center.x, 0, playerStartPoint.center.z);
+            
+            characterController.Initialize();
+            UIController.Instance.UpdateLevel(CompletedLevelCount);
+        }
+        
+        private void UnLoadGame()
+        {
+            StackController.Instance.Dispose();
+            characterController.Dispose();
+        }
+
         private void StartGame()
         {
             GameStarted?.Invoke();
@@ -82,7 +103,17 @@ namespace Game.Scripts.Controllers
             {
                 CompletedLevelCount++;
             }
-            //todo: open game over screen
+            
+            //open game over screen
+            UIController.Instance.OpenGameOverPanel(success, OnGameOverPanelClosed);
+        }
+
+        private void OnGameOverPanelClosed()
+        {
+            UnLoadGame();
+            LoadGame();
+
+            StartGame();
         }
 
         /// <summary>
