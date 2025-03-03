@@ -113,6 +113,9 @@ MonoBehaviour:
   poolSize: 10
   platformSpawnDistance: 5
   platformMoveSpeed: 3
+  platformCutThreshold: 0.1
+  finishPlatformPrefab: {fileID: 8714589920312384369, guid: 50d59dd24e8b8264b890d8c1d9709931,
+    type: 3}
   platformParent: {fileID: 5188209265568043940}
   poolParent: {fileID: 3801215880589438716}
   stackColors:

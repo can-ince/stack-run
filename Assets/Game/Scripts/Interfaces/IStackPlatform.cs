@@ -13,5 +13,7 @@ namespace Game.Scripts.Interfaces
         public GameObject GameObject { get; }
         
         public Rigidbody Rigidbody { get; }
+        
+        public Bounds Bounds { get; }
     }
 }

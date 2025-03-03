@@ -9,7 +9,7 @@ namespace Game.Scripts.Interfaces
         void PlayCelebration();
         void Fall();
         
-        event Action OnCharacterFell;
+        event Action OnFellFromPlatform;
 
     }
 }

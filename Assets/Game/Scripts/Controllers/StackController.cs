@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using Game.Scripts.Behaviours;
+using Game.Scripts.Data;
 using Game.Scripts.Helpers;
 using Game.Scripts.Interfaces;
 using UnityEngine;
@@ -19,13 +21,16 @@ namespace Game.Scripts.Controllers
         [SerializeField] private float platformSpawnDistance = 5f;
         [SerializeField] private float platformMoveSpeed = 3f;
         [SerializeField] private float platformCutThreshold = 0.1f; //how much distance to cut the platform 
-
+        [SerializeField] private FinishAreaBehaviour finishPlatformPrefab;
         [SerializeField] private Transform platformParent;
         [SerializeField] private Transform poolParent;
         [SerializeField] private Material[] stackColors;
 
         private bool _isStackingEnabled;
         private int _perfectStackComboCounter;
+        private LevelData _currentLevelData;
+        private FinishAreaBehaviour _currentFinishPlatform;
+        private Bounds _currentAnchorPlatformBounds;
         private Queue<StackPlatformBehaviour> _platformPool = new Queue<StackPlatformBehaviour>();
         private List<StackPlatformBehaviour> _stacks = new List<StackPlatformBehaviour>();
         public StackPlatformBehaviour CurrentPlatform { get; private set; }
@@ -33,22 +38,27 @@ namespace Game.Scripts.Controllers
         void Awake()
         {
             InitializePool();
-            Initialize();
         }
 
-        public void Initialize()
+        public void Initialize(LevelData levelData)
         {
-            SpawnNewPlatform();
-            OnGameStarted();
-            
+            _currentLevelData = levelData;
             StackPlatformBehaviour.PlatformDriftedAway+=OnPlatformDriftedAway;
+            
+            GameController.GameStarted+=OnGameStarted;
+            GameController.GameEnded+=OnGameEnded;
+            _currentAnchorPlatformBounds = new Bounds(Vector3.zero, Vector3.zero);
+            SetupLevel();
         }
 
         public void Dispose()
         {
             StackPlatformBehaviour.PlatformDriftedAway-=OnPlatformDriftedAway;
+            GameController.GameStarted-=OnGameStarted;
+            GameController.GameEnded-=OnGameEnded;
+
         }
-        
+
         void Update()
         {
             if(!_isStackingEnabled) return;
@@ -57,6 +67,34 @@ namespace Game.Scripts.Controllers
             {
                 StopAndProcessCurrentPlatform();
             }
+        }
+        
+        /// <summary>
+        /// Sets up the level by positioning finish platform and finish line.
+        /// </summary>
+        public void SetupLevel()
+        {
+            //recycle previous platforms if had any
+            foreach (var stackPlatform in _stacks)
+            {
+                stackPlatform.Dispose();
+                
+                ReturnPlatformToPool(stackPlatform);
+            }
+            _stacks.Clear();
+            
+            //initial platform
+            SpawnNewPlatform();
+            
+            // Calculate the total distance from the starting platform
+            // (assumes platforms are placed along the Z-axis).
+            float totalDistance = _currentLevelData.stackCount * platformPrefab.Bounds.size.z +
+                                  finishPlatformPrefab.Bounds.extents.z - platformPrefab.Bounds.extents.z;
+            Vector3 finishPlatformPosition = _stacks[0].transform.position + Vector3.forward * totalDistance;
+
+            // Instantiate the finish platform at the calculated position.
+            _currentFinishPlatform = Instantiate(finishPlatformPrefab, finishPlatformPosition, Quaternion.identity);
+            
         }
 
         /// <summary>
@@ -104,21 +142,22 @@ namespace Game.Scripts.Controllers
         /// <summary>
         ///  Spawns a new platform at the next location and updates the active platform.
         /// </summary>
-        private void SpawnNewPlatform()
+        private IStackPlatform SpawnNewPlatform()
         {
             var isInitialPlatform = _stacks.Count == 0;
             var newPlatform = GetPlatformFromPool();
-
+            
             //  Randomized spawn pos left or right
             var randomDir = Random.Range(0, 2) == 0 ? 1 : -1;
             var targetDir = randomDir == 1 ? Vector3.right : Vector3.left;
 
-            // initial platform spawns at zero
+            // initial platform spawns at last anchor platform
             var newSpawnPosition = !isInitialPlatform
                 ? CurrentPlatform.transform.position +
                   Vector3.forward * platformPrefab.Bounds.size.z +
                   targetDir * platformSpawnDistance
-                : Vector3.zero;
+                : _currentAnchorPlatformBounds.center+
+                  (_currentAnchorPlatformBounds.extents.z)*Vector3.forward; //todo:+platformPrefab.Bounds.extents.z
             
             newPlatform.transform.position = newSpawnPosition;
             newPlatform.transform.rotation = Quaternion.LookRotation(Vector3.forward);
@@ -136,6 +175,49 @@ namespace Game.Scripts.Controllers
 
             CurrentPlatform = newPlatform;
             _stacks.Add(CurrentPlatform);
+
+            return newPlatform;
+        }
+        
+        /// <summary>
+        /// Stops the active platform, performs cutting control and spawns a new platform.
+        /// </summary>
+        private void StopAndProcessCurrentPlatform()
+        {
+            if (CurrentPlatform == null) return;
+            
+            CurrentPlatform.StopMoving();
+
+            if (CheckForPerfectPlacement(CurrentPlatform))
+            {
+                // increase the note pitch with every perfect stack combo count
+                if (_perfectStackComboCounter > 0)
+                    AudioController.Instance.IncreaseNotePitch();
+                
+                // play a sound  
+                AudioController.Instance.PlayNote();
+                
+                _perfectStackComboCounter++;
+
+                OnStackingSucceed(CurrentPlatform);
+
+            }
+            else
+            {
+                // Cut the platform according to previous platform
+                if (CurrentPlatform.TryCutStackPlatform(_stacks[^2]))
+                {
+                    OnStackingSucceed(CurrentPlatform);
+                }
+                else
+                {
+                    //The platform is completely overflowing, GAME OVER!
+                    OnStackingFailed(CurrentPlatform);
+                }
+                
+                _perfectStackComboCounter = 0;
+                AudioController.Instance.ResetNotePitch();
+            }
         }
         
         private void OnGameStarted()
@@ -148,11 +230,25 @@ namespace Game.Scripts.Controllers
 
         }
         
+        private void OnGameEnded(bool success)
+        {
+            if (success)
+            {
+                _currentAnchorPlatformBounds = _currentFinishPlatform.Bounds;
+            }
+        }
+        
+        /// <summary>
+        /// Player did not give any input for a stacking duration 
+        /// </summary>
         private void OnPlatformDriftedAway(IStackPlatform platform)
         {
             OnStackingFailed(platform);
         }
 
+        /// <summary>
+        /// Player failed to add another platform to the stack
+        /// </summary>
         private void OnStackingFailed(IStackPlatform platform)
         {
             _isStackingEnabled = false;
@@ -160,53 +256,33 @@ namespace Game.Scripts.Controllers
         }
 
         /// <summary>
-        /// Stops the active platform, performs cutting control and spawns a new platform.
+        /// Reached to target stack count for current level
         /// </summary>
-        private void StopAndProcessCurrentPlatform()
+        private void OnStackingCompletedForCurrentLevel()
         {
-            if (CurrentPlatform == null) return;
-            
-            CurrentPlatform.StopMoving();
+            _isStackingEnabled = false;
+        }
 
-            if (CheckForPerfectPlacement(CurrentPlatform))
+        /// <summary>
+        /// Player successfully added another platform to the stack
+        /// </summary>
+        private void OnStackingSucceed(IStackPlatform platform)
+        {
+            StackingSucced?.Invoke(CurrentPlatform);
+
+            if (_stacks.Count < _currentLevelData.stackCount)
             {
-                if (_perfectStackComboCounter > 0)
-                    AudioController.Instance.IncreaseNotePitch();
-                
-                // play a sound  
-                AudioController.Instance.PlayNote();
-                
-                _perfectStackComboCounter++;
-                
-                StackingSucced?.Invoke(CurrentPlatform);
                 SpawnNewPlatform();
-
             }
             else
             {
-                // Cut the platform according to previous platform
-                if (CurrentPlatform.TryCutStackPlatform(_stacks[^2]))
-                {
-                    StackingSucced?.Invoke(CurrentPlatform);
-
-                    SpawnNewPlatform();
-                    
-                }
-                else
-                {
-                    //The platform is completely overflowing, GAME OVER!
-                    OnStackingFailed(CurrentPlatform);
-                }
-                
-                _perfectStackComboCounter = 0;
-                AudioController.Instance.ResetNotePitch();
+                OnStackingCompletedForCurrentLevel();
             }
         }
 
         /// <summary>
         ///  Determines if the platform should be cut.
         /// </summary>
-        /// <param name="platform"></param>
         /// <returns>false if platform should be cut </returns>
         private bool CheckForPerfectPlacement(Component platform)
         {

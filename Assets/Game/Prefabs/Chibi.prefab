@@ -365,6 +365,7 @@ GameObject:
   - component: {fileID: 1782327572533206788}
   - component: {fileID: 1991953104}
   - component: {fileID: 1991953105}
+  - component: {fileID: 1749339954747100912}
   m_Layer: 0
   m_Name: Chibi
   m_TagString: Untagged
@@ -438,9 +439,23 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: d15ab3cdfc3df6842a48bafd5bb670a0, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  moveSpeed: 2
+  moveSpeed: 1.75
   rb: {fileID: 1991953104}
   animator: {fileID: 1782327572533206788}
+--- !u!136 &1749339954747100912
+CapsuleCollider:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4978699718255468484}
+  m_Material: {fileID: 0}
+  m_IsTrigger: 1
+  m_Enabled: 1
+  m_Radius: 0.2
+  m_Height: 1.2
+  m_Direction: 1
+  m_Center: {x: 0, y: 0.5, z: 0}
 --- !u!1 &5103577072221404319
 GameObject:
   m_ObjectHideFlags: 0

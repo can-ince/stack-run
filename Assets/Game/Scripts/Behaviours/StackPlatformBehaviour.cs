@@ -70,7 +70,6 @@ namespace Game.Scripts.Behaviours
                     out var newCenterX))
             {
                 Debug.Log("No overlap: The platform is completely overflowing, GAME OVER!");
-                // todo: game over   
 
                 // Set the platform rb kinematic to false and let it fall   
                 platformRigidbody.isKinematic = false;
