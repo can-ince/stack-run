@@ -2,10 +2,11 @@ using System;
 using System.Collections;
 using Game.Scripts.Interfaces;
 using UnityEngine;
+using Zenject;
 
 namespace Game.Scripts.Controllers
 {
-    public class CharacterController : MonoBehaviour, ICharacterController
+    public class PlayerCharacterController : MonoBehaviour, ICharacterController
     {
         [SerializeField] private float moveSpeed = 3f;
         [SerializeField] private Rigidbody rb;
@@ -14,13 +15,20 @@ namespace Game.Scripts.Controllers
         private Vector3 _targetPosition;
         private bool _isFalling, _finished;
         private Coroutine _movementCoroutine;
-
+        private IStackController _stackController;
         private static readonly int DanceAnimID = Animator.StringToHash("Dance");
         private static readonly int RunAnimID = Animator.StringToHash("Run");
 
+        public Transform Transform => transform;
         public event Action OnFellFromPlatform;
         public event Action OnReachedToFinish;
 
+        // Zenject will inject the dependency.
+        [Inject]
+        public void Construct(IStackController stackController)
+        {
+            _stackController = stackController;
+        }
         public void Initialize()
         {
             rb.useGravity = false;
@@ -29,8 +37,8 @@ namespace Game.Scripts.Controllers
             // Set an initial target (could be the starting platform's center)
             _targetPosition = transform.position;
 
-            StackController.StackingFailed += OnPlatformStopped;
-            StackController.StackingSucced += OnPlatformPlaced;
+            _stackController.StackingFailed += OnPlatformStopped;
+            _stackController.StackingSucceed += OnPlatformPlaced;
         }
 
         public void Dispose()
@@ -38,8 +46,8 @@ namespace Game.Scripts.Controllers
             _finished = false;
             _isFalling = false;
 
-            StackController.StackingFailed -= OnPlatformStopped;
-            StackController.StackingSucced -= OnPlatformPlaced;
+            _stackController.StackingFailed -= OnPlatformStopped;
+            _stackController.StackingSucceed -= OnPlatformPlaced;
 
             StopMoving();
         }

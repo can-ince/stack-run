@@ -7,7 +7,7 @@ namespace Game.Scripts.Behaviours
 {
     public class StackPlatformBehaviour : MonoBehaviour, IStackPlatform
     {
-        public static event Action<IStackPlatform> PlatformDriftedAway;
+        public event Action<IStackPlatform> PlatformDriftedAway;
 
         [SerializeField] private Renderer platformRenderer;
         [SerializeField] private Collider platformCollider;

@@ -9,7 +9,14 @@ namespace Game.Scripts.Interfaces
         void PlayCelebration();
         void Fall();
         
+        void Initialize();
+        
+        void Dispose();
+        
         event Action OnFellFromPlatform;
+        event Action OnReachedToFinish;
+        
+        Transform Transform { get; }
 
     }
 }

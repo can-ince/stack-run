@@ -2,14 +2,16 @@ using System;
 using System.Collections.Generic;
 using Game.Scripts.Data;
 using Game.Scripts.Helpers;
+using Game.Scripts.Interfaces;
 using UnityEngine;
+using Zenject;
 
 namespace Game.Scripts.Controllers
 {
     public class GameController : Singleton<GameController>
     {
-        [Header("References")]
-        [SerializeField] private CharacterController characterController;
+        private ICharacterController _playerCharacterController;
+        private IStackController _stackController;
         
         [Header("Level Configurations")]
         // List of level configurations (assign in the Inspector)
@@ -22,6 +24,14 @@ namespace Game.Scripts.Controllers
         {
             get => PlayerPrefs.GetInt(nameof(CompletedLevelCount), 0);
             set => PlayerPrefs.SetInt(nameof(CompletedLevelCount), value);
+        }
+        
+        // Zenject will inject the dependency.
+        [Inject]
+        public void Construct(ICharacterController playerCharacterController, IStackController stackController)
+        {
+            _playerCharacterController = playerCharacterController;
+            _stackController = stackController;
         }
         private void Start()
         {
@@ -37,8 +47,8 @@ namespace Game.Scripts.Controllers
         {
            UIController.Instance.Initialize();
 
-           characterController.OnFellFromPlatform+= OnFellFromPlatform;
-           characterController.OnReachedToFinish += OnCharacterOnReachedFinalPlatform;
+           _playerCharacterController.OnFellFromPlatform+= OnFellFromPlatform;
+           _playerCharacterController.OnReachedToFinish += OnPlayerCharacterOnReachedFinalPlatform;
            
             LoadGame();
             StartGame();
@@ -49,12 +59,12 @@ namespace Game.Scripts.Controllers
         {
             UIController.Instance.Dispose();
             
-            characterController.OnFellFromPlatform-= OnFellFromPlatform;
-            characterController.OnReachedToFinish -= OnCharacterOnReachedFinalPlatform;
+            _playerCharacterController.OnFellFromPlatform-= OnFellFromPlatform;
+            _playerCharacterController.OnReachedToFinish -= OnPlayerCharacterOnReachedFinalPlatform;
 
-            characterController.Dispose();
+            _playerCharacterController.Dispose();
             
-            StackController.Instance.Dispose();
+            _stackController.Dispose();
         }
 
         private void OnFellFromPlatform()
@@ -62,37 +72,37 @@ namespace Game.Scripts.Controllers
             OnGameEnded(false);
         }
 
-        private void OnCharacterOnReachedFinalPlatform()
+        private void OnPlayerCharacterOnReachedFinalPlatform()
         {
-            CameraController.Instance.ActivateFinishVCam(characterController.transform);
+            CameraController.Instance.ActivateFinishVCam(_playerCharacterController.Transform);
 
             OnGameEnded(true);
         }
 
         private void LoadGame()
         {
-            StackController.Instance.Initialize(GetCurrentLevelData());
+            _stackController.Initialize(GetCurrentLevelData());
 
-            var playerStartPoint = StackController.Instance.AnchorPlatformBounds;
+            var playerStartPoint = _stackController.AnchorPlatformBounds;
 
-            characterController.transform.position =
+            _playerCharacterController.Transform.position =
                 new Vector3(playerStartPoint.center.x, 0, playerStartPoint.center.z);
             
-            characterController.Initialize();
+            _playerCharacterController.Initialize();
             UIController.Instance.UpdateLevel(CompletedLevelCount);
         }
         
         private void UnLoadGame()
         {
-            StackController.Instance.Dispose();
-            characterController.Dispose();
+            _stackController.Dispose();
+            _playerCharacterController.Dispose();
         }
 
         private void StartGame()
         {
             GameStarted?.Invoke();
             
-            CameraController.Instance.ActivateFollowVCam(characterController.transform);
+            CameraController.Instance.ActivateFollowVCam(_playerCharacterController.Transform);
         }
 
         private void OnGameEnded(bool success)

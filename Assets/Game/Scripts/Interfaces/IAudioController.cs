@@ -5,5 +5,6 @@ namespace Game.Scripts.Interfaces
         void PlayNote();
         void IncreaseNotePitch();
         void ResetNotePitch();
+        void PlayBlockSound();
     }
 }

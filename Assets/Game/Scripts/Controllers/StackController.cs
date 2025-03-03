@@ -2,20 +2,19 @@ using System;
 using System.Collections.Generic;
 using Game.Scripts.Behaviours;
 using Game.Scripts.Data;
-using Game.Scripts.Helpers;
 using Game.Scripts.Interfaces;
 using UnityEngine;
+using Zenject;
 using Random = UnityEngine.Random;
 
 namespace Game.Scripts.Controllers
 {
-    public class StackController : Singleton<StackController>
+    public class StackController : MonoBehaviour, IStackController
     {
-        public static event Action<IStackPlatform> StackingFailed;
-        public static event Action<IStackPlatform> StackingSucced; 
+        public event Action<IStackPlatform> StackingFailed;
+        public event Action<IStackPlatform> StackingSucceed; 
 
         [Header("Platform Settings")] 
-        [SerializeField] private StackPlatformBehaviour platformPrefab;
         [SerializeField] private int poolSize = 10;
         [SerializeField] private float platformSpawnDistance = 5f;
         [SerializeField] private float platformMoveSpeed = 3f;
@@ -24,16 +23,26 @@ namespace Game.Scripts.Controllers
         [SerializeField] private Transform platformParent;
         [SerializeField] private Transform poolParent;
         [SerializeField] private Material[] stackColors;
-
+        
+        [Inject] private IStackPlatform _platformPrefab; //Injecting as Prefab Interface 
+        [Inject] private DiContainer _container; // Zenject's DI Container
+        private IAudioController _audioController;
         private bool _isStackingEnabled;
         private int _perfectStackComboCounter;
         private LevelData _currentLevelData;
         private FinishAreaBehaviour _currentFinishPlatform;
         private Bounds _currentAnchorPlatformBounds;
-        private Queue<StackPlatformBehaviour> _platformPool = new Queue<StackPlatformBehaviour>();
-        private List<StackPlatformBehaviour> _stacks = new List<StackPlatformBehaviour>();
-        public StackPlatformBehaviour CurrentPlatform { get; private set; }
+        private Queue<IStackPlatform> _platformPool = new Queue<IStackPlatform>();
+        private List<IStackPlatform> _stacks = new List<IStackPlatform>();
+        public IStackPlatform CurrentPlatform { get; private set; }
         public Bounds AnchorPlatformBounds => _currentAnchorPlatformBounds;
+        
+        // Zenject will inject the dependency.
+        [Inject]
+        public void Construct(IAudioController audioController)
+        {
+            _audioController = audioController;
+        }
         void Awake()
         {
             InitializePool();
@@ -42,7 +51,6 @@ namespace Game.Scripts.Controllers
         public void Initialize(LevelData levelData)
         {
             _currentLevelData = levelData;
-            StackPlatformBehaviour.PlatformDriftedAway+=OnPlatformDriftedAway;
             
             GameController.GameStarted+=OnGameStarted;
             GameController.GameEnded+=OnGameEnded;
@@ -51,7 +59,6 @@ namespace Game.Scripts.Controllers
 
         public void Dispose()
         {
-            StackPlatformBehaviour.PlatformDriftedAway-=OnPlatformDriftedAway;
             GameController.GameStarted-=OnGameStarted;
             GameController.GameEnded-=OnGameEnded;
 
@@ -86,9 +93,9 @@ namespace Game.Scripts.Controllers
             
             // Calculate the total distance from the starting platform
             // (assumes platforms are placed along the Z-axis).
-            float totalDistance = _currentLevelData.stackCount * platformPrefab.Bounds.size.z +
-                                  finishPlatformPrefab.Bounds.extents.z - platformPrefab.Bounds.extents.z;
-            Vector3 finishPlatformPosition = _stacks[0].transform.position + Vector3.forward * totalDistance;
+            float totalDistance = _currentLevelData.stackCount * _platformPrefab.Bounds.size.z +
+                                  finishPlatformPrefab.Bounds.extents.z - _platformPrefab.Bounds.extents.z;
+            Vector3 finishPlatformPosition = _stacks[0].GameObject.transform.position + Vector3.forward * totalDistance;
 
             // Instantiate the finish platform at the calculated position.
             _currentFinishPlatform = Instantiate(finishPlatformPrefab, finishPlatformPosition, Quaternion.identity);
@@ -102,27 +109,28 @@ namespace Game.Scripts.Controllers
         {
             for (int i = 0; i < poolSize; i++)
             {
-                StackPlatformBehaviour platform = Instantiate(platformPrefab, poolParent);
-                platform.gameObject.SetActive(false);
-                _platformPool.Enqueue(platform);
+                var newPlatform = _container.InstantiatePrefabForComponent<IStackPlatform>(_platformPrefab.GameObject, poolParent);
+
+                newPlatform.GameObject.SetActive(false);
+                _platformPool.Enqueue(newPlatform);
             }
         }
 
         /// <summary>
         /// Getting platform from pool or creating new one
         /// </summary>
-        private StackPlatformBehaviour GetPlatformFromPool()
+        private IStackPlatform GetPlatformFromPool()
         {
             if (_platformPool.Count > 0)
             {
                 var platform = _platformPool.Dequeue();
-                platform.gameObject.SetActive(true);
-                platform.transform.SetParent(platformParent);
+                platform.GameObject.gameObject.SetActive(true);
+                platform.GameObject.transform.SetParent(platformParent);
                 return platform;
             }
             else
             {
-                var platform = Instantiate(platformPrefab, platformParent);
+                var platform =  _container.InstantiatePrefabForComponent<IStackPlatform>(_platformPrefab.GameObject, platformParent);
                 return platform;
             }
         }
@@ -130,10 +138,10 @@ namespace Game.Scripts.Controllers
         /// <summary>
         /// Recycle platform back to pool
         /// </summary>
-        public void ReturnPlatformToPool(StackPlatformBehaviour platform)
+        public void ReturnPlatformToPool(IStackPlatform platform)
         {
-            platform.gameObject.SetActive(false);
-            platform.transform.SetParent(poolParent);
+            platform.GameObject.SetActive(false);
+            platform.GameObject.transform.SetParent(poolParent);
             _platformPool.Enqueue(platform);
         }
 
@@ -151,16 +159,16 @@ namespace Game.Scripts.Controllers
 
             // initial platform spawns at last anchor platform
             var newSpawnPosition = !isInitialPlatform
-                ? CurrentPlatform.transform.position + Vector3.forward * platformPrefab.Bounds.size.z + targetDir * platformSpawnDistance
+                ? CurrentPlatform.GameObject.transform.position + Vector3.forward * _platformPrefab.Bounds.size.z + targetDir * platformSpawnDistance
                 : _currentAnchorPlatformBounds.center+ (_currentAnchorPlatformBounds.extents.z)*Vector3.forward;
             
-            newPlatform.transform.position = newSpawnPosition;
-            newPlatform.transform.rotation = Quaternion.LookRotation(Vector3.forward);
+            newPlatform.GameObject.transform.position = newSpawnPosition;
+            newPlatform.GameObject.transform.rotation = Quaternion.LookRotation(Vector3.forward);
             
             // Set platform scale based on previous platform
-            newPlatform.transform.localScale = isInitialPlatform
-                ? platformPrefab.transform.localScale
-                : CurrentPlatform.transform.localScale;
+            newPlatform.GameObject.transform.localScale = isInitialPlatform
+                ? _platformPrefab.GameObject.transform.localScale
+                : CurrentPlatform.GameObject.transform.localScale;
             
             newPlatform.Initialize(CurrentPlatform,-randomDir * Vector3.right, platformMoveSpeed,
                 stackColors[Random.Range(0, stackColors.Length)]);
@@ -187,10 +195,10 @@ namespace Game.Scripts.Controllers
             {
                 // increase the note pitch with every perfect stack combo count
                 if (_perfectStackComboCounter > 0)
-                    AudioController.Instance.IncreaseNotePitch();
+                    _audioController.IncreaseNotePitch();
                 
                 // play a sound  
-                AudioController.Instance.PlayNote();
+                _audioController.PlayNote();
                 
                 _perfectStackComboCounter++;
 
@@ -211,8 +219,8 @@ namespace Game.Scripts.Controllers
                 }
                 
                 _perfectStackComboCounter = 0;
-                AudioController.Instance.ResetNotePitch();
-                AudioController.Instance.PlayBlockSound();
+                _audioController.ResetNotePitch();
+                _audioController.PlayBlockSound();
             }
         }
         
@@ -221,7 +229,7 @@ namespace Game.Scripts.Controllers
             _isStackingEnabled = true;
             SpawnNewPlatform();
             
-            AudioController.Instance.ResetNotePitch();
+            _audioController.ResetNotePitch();
             _perfectStackComboCounter = 0;
 
         }
@@ -264,7 +272,7 @@ namespace Game.Scripts.Controllers
         /// </summary>
         private void OnStackingSucceed(IStackPlatform platform)
         {
-            StackingSucced?.Invoke(CurrentPlatform);
+            StackingSucceed?.Invoke(CurrentPlatform);
 
             if (_stacks.Count < _currentLevelData.stackCount)
             {
@@ -280,9 +288,9 @@ namespace Game.Scripts.Controllers
         ///  Determines if the platform should be cut.
         /// </summary>
         /// <returns>false if platform should be cut </returns>
-        private bool CheckForPerfectPlacement(Component platform)
+        private bool CheckForPerfectPlacement(IStackPlatform platform)
         {
-            var diff = Mathf.Abs(platform.transform.position.x - _stacks[^2].transform.position.x);
+            var diff = Mathf.Abs(platform.GameObject.transform.position.x - _stacks[^2].GameObject.transform.position.x);
             return diff < platformCutThreshold;
         }
         

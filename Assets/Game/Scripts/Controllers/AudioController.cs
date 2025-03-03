@@ -4,7 +4,7 @@ using UnityEngine;
 
 namespace Game.Scripts.Controllers
 {
-    public class AudioController : Singleton<AudioController>, IAudioController
+    public class AudioController : MonoBehaviour, IAudioController
     {
         [SerializeField] private AudioSource audioSource;
         [SerializeField] private AudioClip noteClip;
