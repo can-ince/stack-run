@@ -99,6 +99,7 @@ namespace Game.Scripts.Controllers
         {
             if (other.CompareTag("Finish"))
             {
+                other.enabled = false;
                 OnReachedToFinishPlatform();
             }
         }
